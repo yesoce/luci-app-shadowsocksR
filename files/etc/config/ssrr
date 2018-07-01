@@ -9,4 +9,5 @@ config shadowsocksr
 	option method 'rc4-md5'
 	option protocol 'origin'
 	option obfs 'plain'
+	option proxy_port '7070'
 
