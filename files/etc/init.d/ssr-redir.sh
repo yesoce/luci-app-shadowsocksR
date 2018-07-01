@@ -20,6 +20,10 @@ vt_local_ipset="localip"
 vt_remote_ipset="remoteip"
 WHITE_SET=whiteset #强制不走代理的ipset
 
+V2RAY_PIDFILE=/var/run/ssrr-v2ray-go.pid
+DAEMON_OPTS="-config /etc/v2ray/config.json"
+DAEMON=/usr/bin/v2ray
+
 start()
 {
 	local vt_enabled=`uci get ssrr.@shadowsocksr[0].enabled 2>/dev/null`
@@ -46,6 +50,7 @@ start()
 	# $covered_subnets, $local_addresses are not required
 	local covered_subnets=`uci get ssrr.@shadowsocksr[0].covered_subnets 2>/dev/null`
 	local local_addresses=`uci get ssrr.@shadowsocksr[0].local_addresses 2>/dev/null`
+	local proxy_port=`uci get ssrr.@shadowsocksr[0].proxy_port 2>/dev/null`
 
 	
 
@@ -55,7 +60,7 @@ start()
 		return 1
 	fi
 
-	if [ -z "$vt_server_addr" -o -z "$vt_server_port" ]; then
+	if [ $tool == "V2ray" -a [ -z "$vt_server_addr" -o -z "$vt_server_port" ] ]; then
 		echo "WARNING: Shadowsocksr not fully configured, not starting."
 		return 1
 	fi
@@ -97,7 +102,6 @@ start()
 }
 EOF
 
-			sleep 1
 			/usr/bin/ssrr-redir -c $SSR_CONF -u -b0.0.0.0 -l$SS_REDIR_PORT -s$vt_server_addr -p$vt_server_port \
 				-k"$vt_password" -m$vt_method -t$vt_timeout -f $SS_REDIR_PIDFILE || return 1
 			
@@ -173,6 +177,13 @@ EOF
 			
 			redsocks2 -c $SSR_CONF -p $SS_REDIR_PIDFILE || return 1
 			;;
+			V2ray)
+				[ -n "$proxy_port" ] && SS_REDIR_PORT=$proxy_port
+				echo "proxy_port=$SS_REDIR_PORT";
+				sleep 1
+				mkdir -p /var/log/v2ray
+				start-stop-daemon -S -q -p $V2RAY_PIDFILE -x $DAEMON -b -m -- $DAEMON_OPTS || return 1
+			;;
 	esac
 	
 	
@@ -232,9 +243,13 @@ EOF
 	ip rule add fwmark 1 lookup 100
 	ip route add local default dev lo table 100
 
+	if [ "$tool" != "V2ray" ]; then
 	iptables -t nat -A ssrr_pre -d $vt_server_addr -j RETURN
+	fi
 	iptables -t nat -A ssrr_pre -p tcp  -m set --match-set $vt_remote_ipset dst -j REDIRECT --to $SS_REDIR_PORT #强制走代理的IP
+	if [ "$tool" != "V2ray" ]; then
 	iptables -t mangle -A SSRUDP -d $vt_server_addr -j RETURN
+	fi
 	iptables -t mangle -A SSRUDP -p udp --dport 53 -j RETURN
 
 	COUNTER=0 #添加内网访问控制
@@ -409,6 +424,10 @@ stop()
 		kill -9 `cat $SS_LOCAL_PIDFILE`
 		rm -f $SS_LOCAL_PIDFILE
 	fi
+	if [ -f $V2RAY_PIDFILE ]; then
+		kill -9 `cat $V2RAY_PIDFILE`
+		rm -f $V2RAY_PIDFILE
+	fi
 }
 
 keep_chinaip=0
@@ -479,8 +498,8 @@ start_dnsforwarder()
 	echo safe dns = $safe_dns dns mode is $dns_mode
 	local white=`uci get ssrr.@shadowsocksr[0].white 2>/dev/null`
 
-	local tcp_dns_list="208.67.222.222,208.67.220.220" #alex:给pdnsd使用的可靠的国外dns服务器
-	
+	#local tcp_dns_list="208.67.222.222,208.67.220.220" #alex:给pdnsd使用的可靠的国外dns服务器
+	local tcp_dns_list="114.114.114.114"
 	case "$dns_mode" in
 		tcp_gfwlist)
 			[ -n "$safe_dns" ] && tcp_dns_list="$safe_dns,$tcp_dns_list"
@@ -501,7 +520,8 @@ LogOn true
 LogFileThresholdLength 102400
 LogFileFolder /var/log
 UDPLocal 0.0.0.0:$PDNSD_LOCAL_PORT
-TCPGroup $tcp_dns_list * no
+UDPGroup 223.5.5.5:53,8.8.8.8:53 * on
+#TCPGroup $tcp_dns_list * no
 GroupFile
 BlockIP 243.185.187.39,46.82.174.68,37.61.54.158,93.46.8.89,59.24.3.173,203.98.7.65,8.7.198.45,78.16.49.15,159.106.121.75,69.63.187.12,31.13.76.8,31.13.64.49
 IPSubstituting
@@ -545,3 +565,4 @@ stop_dnsforwarder()
 	[ -f  "/etc/dnsforwarder/dnsforwarder.conf.bak" ] && cp /etc/dnsforwarder/dnsforwarder.conf.bak /etc/dnsforwarder/dnsforwarder.conf
 	rm -f /etc/dnsforwarder/dnsforwarder.conf.bak
 }
+

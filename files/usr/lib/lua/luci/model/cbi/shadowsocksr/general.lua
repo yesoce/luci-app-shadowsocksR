@@ -11,11 +11,14 @@ local fs = require "nixio.fs"
 local state_msg = ""
 local ssr_redir_on = (luci.sys.call("pidof ssrr-redir > /dev/null") == 0)
 local redsocks2_on = (luci.sys.call("pidof redsocks2 > /dev/null") == 0)
+local v2ray_on = (luci.sys.call("pidof v2ray > /dev/null") == 0)
 
 if ssr_redir_on then	
 	state_msg = "<b><font color=\"green\">" .. translate("SSR is Running") .. "</font></b>"
 elseif redsocks2_on then
 	state_msg = state_msg .. "<b>  <font color=\"green\">" .. translate("Redsocks2 is Running") .. "</font></b>"
+elseif v2ray_on then                                                                                            
+        state_msg = state_msg .. "<b>  <font color=\"green\">" .. translate("V2ray is Running") .. "</font></b>"
 else
 	state_msg = "<b><font color=\"red\">" .. translate("Not running") .. "</font></b>"
 end
@@ -23,7 +26,7 @@ end
 
 
 m = Map("ssrr", translate("Shadowsocksr Transparent Proxy"),
-	translate("A fast secure tunnel proxy that help you get through firewalls on your router").."<br>使用教程请<a href='http://www.right.com.cn/forum/thread-198649-1-1.html'>点击这里</a><br><br>" .. "状态 - " .. state_msg)
+	translate("A fast secure tunnel proxy that help you get through firewalls on your router").."<br><br>" .. "状态 - " .. state_msg)
 
 s = m:section(TypedSection, "shadowsocksr", translate("Settings"))
 s.anonymous = true
@@ -32,20 +35,22 @@ s.anonymous = true
 switch = s:option(Flag, "enabled", translate("Enable"))
 switch.rmempty = false
 
+
+tool = s:option(ListValue, "tool", translate("Proxy Tool"))           
+tool:value("ShadowsocksR")                                            
+tool:value("Shadowsocks")                                             
+tool:value("Redsocks2")                                               
+tool:value("V2ray")  
+
 server = s:option(Value, "server", translate("Server Address"))
-server.optional = false
+server:depends("tool","ShadowsocksR")
+server:depends("tool","Shadowsocks")
 server.datatype = "host"
-server.rmempty = false
 
 server_port = s:option(Value, "server_port", translate("Server Port"))
+server_port:depends("tool","ShadowsocksR")
+server_port:depends("tool","Shadowsocks")
 server_port.datatype = "range(1,65535)"
-server_port.optional = false
-server_port.rmempty = false
-
-tool = s:option(ListValue, "tool", translate("Proxy Tool"))
-tool:value("ShadowsocksR")
-tool:value("Shadowsocks")
-tool:value("Redsocks2")
 
 red_type=s:option(ListValue,"red_type",translate("Proxy Server Type"))
 red_type:value("socks5",translate("Socks5"))
@@ -57,7 +62,13 @@ red_type:depends({tool="Redsocks2"})
 username = s:option(Value, "username", translate("Proxy User Name"))
 username:depends({tool="Redsocks2"})
 
+proxy_port = s:option(Value, "proxy_port", translate("Proxy Port"))
+proxy_port:depends({tool="V2ray"})
+proxy_port.datatype = "range(1,65535)"                                                                                                                      
+
 password = s:option(Value, "password", translate("Password"))
+password:depends("tool","ShadowsocksR")
+password:depends("tool","Shadowsocks")
 password.password = true
 
 

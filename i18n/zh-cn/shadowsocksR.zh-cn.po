@@ -154,8 +154,23 @@ msgstr "同时开启ssr-local"
 msgid "Open ssr-local port as well"
 msgstr "开启ssr-local有利于排查问题"
 
+msgid "Proxy Tool"
+msgstr "代理工具"
 
+msgid "Proxy Server Type"
+msgstr "代理服务器类型"
 
+msgid "Proxy User Name"
+msgstr "代理账号"
 
+msgid "Proxy Port"
+msgstr "代理端口"
 
+msgid "SSR is Running"
+msgstr "SSR 运行中"
 
+msgid "Redsocks2 is Running"
+msgstr "Redsocks2 运行中"
+
+msgid "V2ray is Running"
+msgstr "V2ray 运行中"
